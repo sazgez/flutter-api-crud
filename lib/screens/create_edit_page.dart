@@ -1,32 +1,58 @@
-import 'dart:convert';
+// ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
-import 'package:http/http.dart' as http;
+import 'package:todocrudapp/services/services.dart';
+import 'package:todocrudapp/utils/utils.dart';
 
-class AddPage extends StatefulWidget {
-  const AddPage({super.key});
+class CreateEditPage extends StatefulWidget {
+  final Map? task;
+
+  const CreateEditPage({
+    super.key,
+    this.task,
+  });
 
   @override
-  State<AddPage> createState() => _AddPageState();
+  State<CreateEditPage> createState() => _CreateEditPageState();
 }
 
-class _AddPageState extends State<AddPage> {
-  TextEditingController titleController = TextEditingController();
-  TextEditingController descriptionController = TextEditingController();
+class _CreateEditPageState extends State<CreateEditPage> {
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  bool isEdit = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.task != null) {
+      isEdit = true;
+      _titleController.text = widget.task!['title'];
+      _descriptionController.text = widget.task!['description'];
+    }
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+    _titleController.dispose();
+    _descriptionController.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create Task'),
+        title: Text(
+          isEdit ? 'Edit Task' : 'Create Task',
+        ),
         centerTitle: true,
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
           TextField(
-            controller: titleController,
+            controller: _titleController,
             decoration: const InputDecoration(
               focusedBorder: OutlineInputBorder(
                 borderSide: BorderSide(
@@ -52,7 +78,7 @@ class _AddPageState extends State<AddPage> {
           ),
           const Gap(20),
           TextField(
-            controller: descriptionController,
+            controller: _descriptionController,
             decoration: const InputDecoration(
               focusedBorder: OutlineInputBorder(
                 borderSide: BorderSide(
@@ -94,11 +120,14 @@ class _AddPageState extends State<AddPage> {
                 ),
               ),
             ),
-            onPressed: submitTask,
-            child: const Text(
-              'Submit',
-              style: TextStyle(
-                color: Colors.black,
+            onPressed: isEdit ? updateTask : submitTask,
+            child: Padding(
+              padding: const EdgeInsets.all(15),
+              child: Text(
+                isEdit ? 'Update' : 'Submit',
+                style: const TextStyle(
+                  color: Colors.black,
+                ),
               ),
             ),
           ),
@@ -108,51 +137,59 @@ class _AddPageState extends State<AddPage> {
   }
 
   Future<void> submitTask() async {
-    // create the data (body) to be posted
-    final title = titleController.text.trim();
-    final description = descriptionController.text.trim();
+    final title = _titleController.text.trim();
+    final description = _descriptionController.text.trim();
     final body = {
       "title": title,
       "description": description,
       "is_completed": false
     };
 
-    // submit the data to the server
-    final url = Uri.parse('https://api.nstack.in/v1/todos');
-    final response = await http.post(
-      url,
-      body: jsonEncode(body),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    );
+    final isSuccess = await TaskService.submitTask(body: body);
 
-    // show success or fail message based on status
-    if (response.statusCode == 201) {
-      titleController.clear();
-      descriptionController.clear();
+    if (isSuccess) {
+      _titleController.clear();
+      _descriptionController.clear();
       showMessage(
-        'Creation Success  |  Code: ${response.statusCode}',
+        context,
+        'Creation Success',
         Colors.green,
       );
     } else {
       showMessage(
-        'Creation Failed  |  Code: ${response.statusCode}',
+        context,
+        'Creation Failed',
         Colors.red,
       );
     }
   }
 
-  void showMessage(String message, Color color) {
-    final snackBar = SnackBar(
-      content: Text(
-        message,
-        style: const TextStyle(
-          color: Colors.black,
-        ),
-      ),
-      backgroundColor: color,
+  Future<void> updateTask() async {
+    final title = _titleController.text.trim();
+    final description = _descriptionController.text.trim();
+    final isCompleted = widget.task!['is_completed'];
+    final id = widget.task!['_id'];
+    final body = {
+      "title": title,
+      "description": description,
+      "is_completed": isCompleted
+    };
+
+    final isSuccess = await TaskService.updateTask(
+      id: id,
+      body: body,
     );
-    ScaffoldMessenger.of(context).showSnackBar(snackBar);
+
+    isSuccess
+        ? showMessage(
+            context,
+            'Update Success',
+            Colors.green,
+          )
+        : showMessage(
+            context,
+            'Update Failed',
+            Colors.red,
+          );
   }
 }

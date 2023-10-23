@@ -1,8 +1,10 @@
-import 'dart:convert';
+// ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
 import 'package:todocrudapp/screens/screens.dart';
-import 'package:http/http.dart' as http;
+import 'package:todocrudapp/services/services.dart';
+import 'package:todocrudapp/utils/utils.dart';
+import 'package:todocrudapp/widgets/widgets.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -35,57 +37,100 @@ class _HomePageState extends State<HomePage> {
         ),
         child: RefreshIndicator(
           onRefresh: fetchTasks,
-          child: ListView.builder(
-            itemCount: tasks.length,
-            itemBuilder: (context, index) {
-              final task = tasks[index] as Map;
-              return ListTile(
-                leading: CircleAvatar(
-                  child: Text(
-                    '${index + 1}',
-                  ),
-                ),
-                title: Text(
-                  '${task['title']}',
-                ),
-                subtitle: Text(
-                  '${task['description']}',
-                ),
-                trailing: SelectableText('${task['_id']}'),
-              );
-            },
+          child: Visibility(
+            visible: tasks.isNotEmpty,
+            replacement: Center(
+              child: Text(
+                'No Task',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            child: ListView.builder(
+              padding: const EdgeInsets.all(8),
+              itemCount: tasks.length,
+              itemBuilder: (context, index) {
+                final task = tasks[index] as Map;
+
+                return TaskCard(
+                  task: task,
+                  index: index,
+                  navigateToEdit: navigateToEdit,
+                  deleteByID: deleteByID,
+                );
+              },
+            ),
           ),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: navigateToCreatePage,
+        onPressed: navigateToCreate,
         label: const Text('Add Task'),
       ),
     );
   }
 
-  void navigateToCreatePage() {
+  Future<void> navigateToCreate() async {
     final route = MaterialPageRoute(
-      builder: (context) => const AddPage(),
+      builder: (context) => const CreateEditPage(),
     );
-    Navigator.push(context, route);
+    await Navigator.push(
+      context,
+      route,
+    ).then(
+      (_) => fetchTasks(),
+    );
+  }
+
+  Future<void> navigateToEdit(Map task) async {
+    final route = MaterialPageRoute(
+      builder: (context) => CreateEditPage(task: task),
+    );
+    await Navigator.push(
+      context,
+      route,
+    ).then(
+      (_) => fetchTasks(),
+    );
+  }
+
+  Future<void> deleteByID(String id) async {
+    final isSuccess = await TaskService.deleteByID(id: id);
+    if (isSuccess) {
+      // Remove item from the list
+      final filtered = tasks.where((element) => element['_id'] != id).toList();
+      setState(() {
+        tasks = filtered;
+      });
+      showMessage(
+        context,
+        'Deletion Success',
+        Colors.green,
+      );
+    } else {
+      showMessage(
+        context,
+        'Deletion Failed',
+        Colors.red,
+      );
+    }
   }
 
   Future<void> fetchTasks() async {
     setState(() {
       isLoading = true;
     });
-    final url = Uri.parse('https://api.nstack.in/v1/todos?page=1&limit=20');
-    final response = await http.get(url);
-    if (response.statusCode == 200) {
-      final json = jsonDecode(response.body) as Map;
-      final data = json['items'] as List;
-      setState(() {
-        tasks = data;
-      });
-    } else {
-      // show error
-    }
+
+    final response = await TaskService.fechTasks();
+    response != null
+        ? setState(() {
+            tasks = response;
+          })
+        : showMessage(
+            context,
+            'Something went wrong',
+            Colors.red,
+          );
+
     setState(() {
       isLoading = false;
     });
